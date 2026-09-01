@@ -1,0 +1,16 @@
+cgsites 3456
+cgtypes 2
+H2O
+CO2
+moltypes 2
+mol 1 1
+sitetypes 
+H2O
+bonds 0
+mol 1 1
+sitetypes
+CO2
+bonds 0
+system 2
+1 2944
+2 512

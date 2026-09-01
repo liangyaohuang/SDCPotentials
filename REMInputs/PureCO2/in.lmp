@@ -1,0 +1,41 @@
+
+units          real
+atom_style     full
+boundary        p p p      # Periodic boundary conditions in all directions
+
+pair_style     table linear 2000
+pair_modify    mix arithmetic
+
+neighbor       3.0 bin
+neigh_modify   every 1 delay 1 check yes
+# special_bonds  lj 0.0 1.0 1.0
+
+read_data co2.data
+pair_coeff     1 1 Pair_CO2-CO2.table CO2-CO2
+
+minimize       1.0e-10 1.0e-10 100000 1000000
+
+variable myseed equal floor(random(1,1000000,23456))
+velocity all create 270.0 ${myseed} mom yes rot yes dist gaussian
+timestep 1.0
+fix anneal all nvt temp 270.0 270.0 1000.0 
+
+dump anneal all custom 100 pre-${myseed}.lammpstrj id type mass x y z
+dump_modify anneal sort id
+run 100000
+
+unfix anneal
+undump anneal
+reset_timestep 0
+
+timestep 5.0
+
+fix 1 all nvt temp 270.0 270.0 1000.0 
+
+thermo 20000
+thermo_style custom step spcpu temp ke pe etotal lx ly lz pxx pyy pzz density vol 
+
+dump 1 all custom 100 dumpco2.lammpstrj id type mass x y z
+dump_modify 1 sort id
+
+run 400000

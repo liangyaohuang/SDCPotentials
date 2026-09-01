@@ -1,0 +1,127 @@
+# Date: 2025-06-23
+
+# ==================== 1. INITIALIZATION ====================
+units           real       # kcal/mol, Angstrom, fs, K, atm, g/mol
+atom_style      full       # Needed for charges, bonds, angles, etc.
+boundary        p p p      # Periodic boundary conditions in all directions
+                           # (adjust if you have non-periodic simulations)
+
+# ==================== 2. READ DATA FILE ====================
+read_data       hydrate.data   
+group		water type 1 2
+group		co2 type 3 4
+
+# ==================== 3. FORCE FIELD DEFINITION ====================
+
+# 3.1 Non-bonded (Lennard-Jones and Coulomb)
+# Long-range electrostatics (Ewald Summation - PPPM method)
+kspace_style    pppm/tip4p 1.0e-4   # pppm: Particle-Particle Particle-Mesh, 1.0e-4 is the desired precision
+# '10.5' is the cutoff distance for Lennard-Jones and real-space Coulombic interactions (Angstroms).
+pair_style	lj/cut/tip4p/long 1 2 1 1 0.1577 10.5
+
+# Define Lennard-Jones parameters for each atom type pair.
+# The parameters (epsilon, sigma) must be in LAMMPS 'real' units (kcal/mol, Angstroms).
+# For 1-2, 1-3 non-bonded exclusions, we'll use 'special_bonds' below.
+
+# pair_coeff I J epsilon sigma
+pair_coeff      1 1  0.21079  3.16685 # opls_1005 (O) - opls_1005 (O)
+pair_coeff	2 2  0.0  1.0
+pair_coeff	1 2  0.0  1.0
+
+#co2 interactions
+pair_coeff      4 4  0.055895   2.757   # opls_1003 (C) - opls_1003 (C)
+pair_coeff      3 3  0.159975   3.033   # opls_1004 (O) - opls_1004 (O)
+pair_coeff      3 4  0.094561   2.895   # opls_1003 (C) - opls_1004 (O) (Lorentz-Berthelot mixing)
+
+#co2-h2o interactions
+pair_coeff	1 4  0.11940   2.95483
+pair_coeff	1 3  0.20200   3.09920
+pair_coeff	2 4  0.0  1.0
+pair_coeff	2 3  0.0  1.0
+
+# 3.2 Bond Definition
+bond_style      harmonic
+bond_coeff      1  221832.4  0.9572
+bond_coeff      2  295.411  1.149
+
+# 3.2 Angle Potential (O-C-O)
+# GROMACS used a harmonic angle with ka=1236.00 kJ/mol/rad^2 and theta0=180.00 deg.
+# Converted LAMMPS K = 295.539 kcal/mol/rad^2.
+angle_style     harmonic
+angle_coeff     1  75.899  104.52  # Angle type 1: H-O-H (K, theta0)
+angle_coeff     2  295.411  180.00  # Angle type 1: O-C-O (K, theta0)
+
+# Energy minimization (highly recommended before starting MD)
+# Ensures your initial structure is stable and eliminates high-energy overlaps.
+# etol: energy tolerance for convergence
+# ftol: force tolerance for convergence
+# maxiter: max iterations
+# maxeval: max force/energy evaluations
+minimize        1.0e-10 1.0e-10 100000 1000000
+
+# 3.3 Bond Constraints (C-O Bonds)
+fix             shake_all all shake 0.0001 20 0 b 1 a 1 b 2
+
+# 3.4 Special Bonds (Non-bonded exclusions)
+special_bonds   lj/coul 0.0 0.0 0.5 # 1-2 excluded, 1-3 excluded, 1-4 scaled by 0.5
+
+# ==================== 4. SIMULATION SETTINGS ====================
+
+# Define an atom group for the entire system (optional, but good practice)
+
+# Initial temperature (useful if starting from non-zero temp or for NVT)
+velocity        all create 200.0 12345 dist gaussian mom yes rot yes
+
+# Output thermodynamic data to screen and log file every 100 steps.
+thermo          100
+thermo_style    custom step temp pe ke etotal press vol density
+
+# ==================== 5. PREEQUILIBRIUM ====================
+
+dump            preeq all custom 100 prehydrate.lammpstrj id mol type q mass x y z fx fy fz
+dump_modify     preeq sort id
+
+reset_timestep	0
+timestep        1.0        # fs (already defined at top, typically for MD simulations)
+neigh_modify	delay 0 every 1 check yes
+
+fix             nvt all nvt temp 200.0 200.0 1000.0 
+run             200000      
+unfix		nvt
+
+fix             npt_1 all npt temp 200.0 270.0 1000.0 iso 3000.0 3000.0 10000.0 
+run             140000      
+unfix		npt_1
+
+fix             npt_2 all npt temp 270.0 270.0 1000.0 iso 3000.0 3000.0 10000.0 
+run             100000      
+unfix		npt_2
+
+undump		preeq
+
+# ==================== 6. PRODUCTION RUN (Choose one simulation type) ====================
+# Dump trajectory frames to a file (optional, but good for visualization)
+# dump ID group-ID style N file
+dump            prod all custom 100 dumphydrate.lammpstrj id mol type q mass x y z fx fy fz
+dump_modify     prod sort id
+
+# Example: NVT simulation (constant Number of particles, Volume, Temperature)
+# fix             ID group-ID style args...
+#   nvt: Nose-Hoover thermostat and barostat
+#   temp: start_temp end_temp damping_parameter (in fs)
+fix             prod all nvt temp 270.0 270.0 100.0 
+
+# Example: NPT simulation (constant Number of particles, Pressure, Temperature)
+# fix             prod all npt temp 300.0 300.0 100.0 iso 1.0 1.0 1000.0 # Isotropic pressure control at 1.0 atm
+
+# Run command
+reset_timestep	0
+timestep        2.0        # fs (already defined at top, typically for MD simulations)
+
+neigh_modify	delay 0 every 1 check yes
+run             5000000      # Run for 10 nanoseconds
+
+# Write restart file (optional)
+# write_restart   hydrate.restart
+
+print "Simulation finished successfully!"

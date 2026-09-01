@@ -1,0 +1,20 @@
+site-types:
+  H2O:
+    index:    [    0,    1,    2]
+    x-weight: [ 16.0,  1.0,  1.0]
+    f-weight: [  1.0,  1.0,  1.0]
+  CO2:
+    index:    [    0,    1,    2]
+    x-weight: [ 12.0, 16.0, 16.0]
+    f-weight: [  1.0,  1.0,  1.0]
+system:
+  - anchor: 0
+    repeat: 2944
+    offset: 3
+    sites:
+      - [H2O, 0]
+  - anchor: 8832
+    repeat: 512
+    offset: 3
+    sites:
+      - [CO2, 0]

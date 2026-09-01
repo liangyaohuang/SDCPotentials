@@ -1,0 +1,7 @@
+--top system.data
+--traj dumphydrate.lammpstrj
+--cut 15.5
+--names H2O,CO2
+--pair model=BSpline,type=H2O:CO2,min=2.8,max=15.0,resolution=0.05,order=6
+--save return
+--verbose 0

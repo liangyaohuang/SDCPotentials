@@ -1,0 +1,75 @@
+# Date: 2025-06-23
+
+# ==================== 1. INITIALIZATION ====================
+units           real       # kcal/mol, Angstrom, fs, K, atm, g/mol
+atom_style      full       # Needed for charges, bonds, angles, etc.
+boundary        p p p      # Periodic boundary conditions in all directions
+                           # (adjust if you have non-periodic simulations)
+
+# ==================== 2. READ DATA FILE ====================
+read_data       CG_hydrate.data   
+group		water type 1
+group		co2 type 2
+
+# ==================== 3. FORCE FIELD DEFINITION ====================
+
+# 3.1 Non-bonded (Lennard-Jones and Coulomb)
+pair_style	table  linear  2000
+pair_coeff	1 1  bumper_tip4pice_270.table wat_wat
+pair_coeff	2 2  Pair_CO2-CO2.table CO2-CO2
+pair_coeff	1 2  Pair_H2O-CO2.table H2O-CO2
+
+minimize        1.0e-10 1.0e-10 100000 1000000
+
+# ==================== 4. SIMULATION SETTINGS ====================
+
+# Define an atom group for the entire system (optional, but good practice)
+
+# Initial temperature (useful if starting from non-zero temp or for NVT)
+velocity        all create 500.0 12345 dist gaussian mom yes rot yes
+
+# Output thermodynamic data to screen and log file every 100 steps.
+thermo          100
+thermo_style    custom step temp pe ke etotal press vol density
+
+# ==================== 5. PREEQUILIBRIUM ====================
+
+dump            preeq all custom 100 prehydrate.lammpstrj id mol type q mass x y z fx fy fz
+dump_modify     preeq sort id
+
+reset_timestep	0
+timestep        1.0        # fs (already defined at top, typically for MD simulations)
+neigh_modify	delay 0 every 1 check yes
+
+fix             nvt all nvt temp 500.0 500.0 1000.0 
+run             500000      
+unfix		nvt
+
+undump		preeq
+
+# ==================== 6. PRODUCTION RUN (Choose one simulation type) ====================
+# Dump trajectory frames to a file (optional, but good for visualization)
+# dump ID group-ID style N file
+dump            prod all custom 100 dumphydrate.lammpstrj id mol type q mass x y z fx fy fz
+dump_modify     prod sort id
+
+# Example: NVT simulation (constant Number of particles, Volume, Temperature)
+# fix             ID group-ID style args...
+#   nvt: Nose-Hoover thermostat and barostat
+#   temp: start_temp end_temp damping_parameter (in fs)
+fix             prod all npt temp 270.0 270.0 1000.0 iso 10000.0 10000.0 10000.0 
+
+# Example: NPT simulation (constant Number of particles, Pressure, Temperature)
+# fix             prod all npt temp 300.0 300.0 100.0 iso 1.0 1.0 1000.0 # Isotropic pressure control at 1.0 atm
+
+# Run command
+reset_timestep	0
+timestep        2.0        # fs 
+
+neigh_modify	delay 0 every 1 check yes
+run             5000000      # Run for 100 nanoseconds
+
+# Write restart file (optional)
+# write_restart   nucleation.restart
+
+print "Simulation finished successfully!"
